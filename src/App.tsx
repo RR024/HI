@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { todayLocal } from './utils';
 import { api } from './services/api';
 import { Staff, JobType, AttendanceRecord, DailyWage, CompanySettings, DashboardStats, User as UserType } from './types';
 import { Header } from './components/Header';
@@ -30,14 +31,14 @@ export function App() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [jobTypes, setJobTypes] = useState<JobType[]>([]);
   const [wages, setWages] = useState<DailyWage[]>([]);
-  const [attendanceDate, setAttendanceDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [attendanceDate, setAttendanceDate] = useState<string>(todayLocal());
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [usersList, setUsersList] = useState<UserType[]>([]);
 
   // Selected Date for Wages
-  const [wageFilterDate, setWageFilterDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [wageFilterDate, setWageFilterDate] = useState<string>(todayLocal());
 
   // Modals State
   const [isStaffModalOpen, setIsStaffModalOpen] = useState<boolean>(false);
@@ -55,6 +56,8 @@ export function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const [sessionCount, setSessionCount] = useState(0);
+
   // Auth Handlers
   const handleLogin = async (username: string, pass: string) => {
     try {
@@ -62,8 +65,8 @@ export function App() {
       setAuthError('');
       const authRes = await api.login(username, pass);
       setCurrentUser(authRes.user);
+      setSessionCount((prev) => prev + 1);
       showToast(`Welcome back, ${authRes.user.name} (${authRes.user.role})!`);
-      fetchAllData(authRes.user);
     } catch (err: any) {
       setAuthError(err.message || 'Login failed');
     } finally {
@@ -77,16 +80,25 @@ export function App() {
     showToast('Logged out successfully.');
   };
 
-  // Data Fetching
-  const fetchAllData = async (user = currentUser) => {
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+      showToast('Session expired or unauthorized. Please sign in again.', 'error');
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
+  // Data Fetching with explicit parameter defaults to avoid stale closures
+  const fetchAllData = useCallback(async (user = currentUser, wDate = wageFilterDate, aDate = attendanceDate) => {
     if (!user) return;
     try {
       setLoading(true);
       const promises: Promise<any>[] = [
         api.getStaff(),
         api.getJobs(),
-        api.getWages({ date: wageFilterDate }),
-        api.getAttendance(attendanceDate),
+        api.getWages({ date: wDate }),
+        api.getAttendance(aDate),
         api.getDashboardStats(),
         api.getSettings(),
       ];
@@ -113,13 +125,13 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [wageFilterDate, attendanceDate, currentUser]);
 
   useEffect(() => {
     if (currentUser) {
-      fetchAllData(currentUser);
+      fetchAllData(currentUser, wageFilterDate, attendanceDate);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, sessionCount]);
 
   // Reload Attendance when date changes
   useEffect(() => {
@@ -158,25 +170,39 @@ export function App() {
   };
 
   const handleSaveStaff = async (staffData: Partial<Staff>) => {
-    if (editingStaff) {
-      const updated = await api.updateStaff(editingStaff.id, staffData);
-      setStaffList((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-      showToast(`Staff member "${updated.name}" updated successfully!`);
-    } else {
-      const created = await api.createStaff(staffData);
-      setStaffList((prev) => [created, ...prev]);
-      showToast(`New staff "${created.name}" (${created.staff_code}) registered!`);
+    try {
+      if (editingStaff) {
+        const updated = await api.updateStaff(editingStaff.id, staffData);
+        setStaffList((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        showToast(`Staff member "${updated.name}" updated successfully!`);
+      } else {
+        const created = await api.createStaff(staffData);
+        setStaffList((prev) => [created, ...prev]);
+        showToast(`New staff "${created.name}" (${created.staff_code}) registered!`);
+      }
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save staff record', 'error');
+      throw err;
     }
-    const stats = await api.getDashboardStats();
-    setDashboardStats(stats);
   };
 
   const handleDeleteStaff = async (id: number) => {
-    await api.deleteStaff(id);
-    setStaffList((prev) => prev.filter((s) => s.id !== id));
-    showToast('Staff record removed.');
-    const stats = await api.getDashboardStats();
-    setDashboardStats(stats);
+    try {
+      const result = await api.deleteStaff(id);
+      if (result.deactivated) {
+        // Staff with payroll history are kept (marked Inactive) rather than erased.
+        setStaffList((prev) => prev.map((s) => (s.id === id ? { ...s, status: 'Inactive' } : s)));
+      } else {
+        setStaffList((prev) => prev.filter((s) => s.id !== id));
+      }
+      showToast(result.message || 'Staff record removed.');
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete staff record', 'error');
+    }
   };
 
   const handleViewStaffDetail = async (staff: Staff) => {
@@ -196,33 +222,49 @@ export function App() {
   // Job Type Handlers
   // -------------------------------------------------------------
   const handleCreateJob = async (data: Partial<JobType>) => {
-    const created = await api.createJob(data);
-    setJobTypes((prev) => [...prev, created]);
-    showToast(`Job Scheme "${created.title}" added!`);
+    try {
+      const created = await api.createJob(data);
+      setJobTypes((prev) => [...prev, created]);
+      showToast(`Job Scheme "${created.title}" added!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create job scheme', 'error');
+    }
   };
 
   const handleUpdateJob = async (id: number, data: Partial<JobType>) => {
-    const updated = await api.updateJob(id, data);
-    setJobTypes((prev) => prev.map((j) => (j.id === id ? updated : j)));
-    showToast(`Job Scheme "${updated.title}" updated!`);
+    try {
+      const updated = await api.updateJob(id, data);
+      setJobTypes((prev) => prev.map((j) => (j.id === id ? updated : j)));
+      showToast(`Job Scheme "${updated.title}" updated!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update job scheme', 'error');
+    }
   };
 
   const handleDeleteJob = async (id: number) => {
-    await api.deleteJob(id);
-    setJobTypes((prev) => prev.filter((j) => j.id !== id));
-    showToast('Job scheme removed.');
+    try {
+      await api.deleteJob(id);
+      setJobTypes((prev) => prev.filter((j) => j.id !== id));
+      showToast('Job scheme removed.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove job scheme', 'error');
+    }
   };
 
   // -------------------------------------------------------------
   // Attendance Handlers
   // -------------------------------------------------------------
   const handleSaveAttendance = async (date: string, records: any[]) => {
-    await api.saveBulkAttendance(date, records);
-    const refreshed = await api.getAttendance(date);
-    setAttendanceRecords(refreshed.records);
-    const stats = await api.getDashboardStats();
-    setDashboardStats(stats);
-    showToast(`Attendance for ${records.length} staff members saved!`);
+    try {
+      await api.saveBulkAttendance(date, records);
+      const refreshed = await api.getAttendance(date);
+      setAttendanceRecords(refreshed.records);
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+      showToast(`Attendance for ${records.length} staff members saved!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save attendance', 'error');
+    }
   };
 
   // -------------------------------------------------------------
@@ -234,67 +276,99 @@ export function App() {
   };
 
   const handleSaveWage = async (wageData: Partial<DailyWage>) => {
-    if (editingWage) {
-      const updated = await api.updateWage(editingWage.id, wageData);
-      setWages((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
-      showToast('Daily wage record updated!');
-    } else {
-      const created = await api.createWage(wageData);
-      setWages((prev) => [created, ...prev]);
-      showToast(`Daily wage of ₹${created.net_wage} logged for ${created.staff_name}!`);
+    try {
+      if (editingWage) {
+        const updated = await api.updateWage(editingWage.id, wageData);
+        setWages((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+        showToast('Daily wage record updated!');
+      } else {
+        const created = await api.createWage(wageData);
+        setWages((prev) => [created, ...prev]);
+        showToast(`Daily wage of ₹${created.net_wage} logged for ${created.staff_name}!`);
+      }
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save wage entry', 'error');
+      throw err;
     }
-    const stats = await api.getDashboardStats();
-    setDashboardStats(stats);
   };
 
   const handleUpdateWageStatus = async (id: number, status: string, mode?: string) => {
-    await api.updateWageStatus(id, status, mode);
-    setWages((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, payment_status: status as any, payment_mode: (mode as any) || w.payment_mode } : w))
-    );
-    const stats = await api.getDashboardStats();
-    setDashboardStats(stats);
-    showToast(`Wage payment status changed to "${status}"`);
+    try {
+      await api.updateWageStatus(id, status, mode);
+      setWages((prev) =>
+        prev.map((w) => (w.id === id ? { ...w, payment_status: status as any, payment_mode: (mode as any) || w.payment_mode } : w))
+      );
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+      showToast(`Wage payment status changed to "${status}"`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update payment status', 'error');
+    }
   };
 
   const handleDeleteWage = async (id: number) => {
-    await api.deleteWage(id);
-    setWages((prev) => prev.filter((w) => w.id !== id));
-    const stats = await api.getDashboardStats();
-    setDashboardStats(stats);
-    showToast('Wage record deleted.');
+    try {
+      await api.deleteWage(id);
+      setWages((prev) => prev.filter((w) => w.id !== id));
+      const stats = await api.getDashboardStats();
+      setDashboardStats(stats);
+      showToast('Wage record deleted.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to delete wage entry', 'error');
+    }
   };
 
   // -------------------------------------------------------------
   // Users Handlers (Admin only)
   // -------------------------------------------------------------
   const handleCreateUser = async (data: any) => {
-    const created = await api.createUser(data);
-    const users = await api.getUsers();
-    setUsersList(users);
-    showToast(`User account "${created.name}" created with role "${created.role}"!`);
+    try {
+      const created = await api.createUser(data);
+      const users = await api.getUsers();
+      setUsersList(users);
+      showToast(`User account "${created.name}" created with role "${created.role}"!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create user account', 'error');
+      throw err;
+    }
   };
 
   const handleUpdateUser = async (id: number, data: any) => {
-    const updated = await api.updateUser(id, data);
-    const users = await api.getUsers();
-    setUsersList(users);
-    showToast(`User account "${updated.name}" updated!`);
+    try {
+      const updated = await api.updateUser(id, data);
+      const users = await api.getUsers();
+      setUsersList(users);
+      showToast(`User account "${updated.name}" updated!`);
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update user account', 'error');
+      throw err;
+    }
   };
 
   const handleDeleteUser = async (id: number) => {
-    await api.deleteUser(id);
-    setUsersList((prev) => prev.filter((u) => u.id !== id));
-    showToast('User account removed.');
+    try {
+      await api.deleteUser(id);
+      setUsersList((prev) => prev.filter((u) => u.id !== id));
+      showToast('User account removed.');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to remove user account', 'error');
+    }
   };
 
   // -------------------------------------------------------------
   // Settings Handler
   // -------------------------------------------------------------
   const handleSaveSettings = async (settingsData: Partial<CompanySettings>) => {
-    const updated = await api.updateSettings(settingsData);
-    setSettings(updated);
-    showToast('Company settings updated successfully!');
+    try {
+      const updated = await api.updateSettings(settingsData);
+      setSettings(updated);
+      showToast('Company settings updated successfully!');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to save company settings', 'error');
+      throw err;
+    }
   };
 
   // If not logged in, render the Login Screen
@@ -336,7 +410,6 @@ export function App() {
         onLogout={handleLogout}
         onOpenStaffModal={() => handleOpenStaffModal()}
         onOpenWageModal={() => handleOpenWageModal()}
-        activeTab={activeTab}
       />
 
       {/* Navigation Tab Bar with Role Filtering */}

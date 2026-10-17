@@ -106,7 +106,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <span>{tab.label}</span>
                 {tab.badge !== undefined && (
                   <span
-                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                    className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
                       isActive
                         ? 'bg-indigo-200/60 text-indigo-800'
                         : 'bg-slate-200 text-slate-700'

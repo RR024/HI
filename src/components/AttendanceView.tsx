@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { todayLocal } from '../utils';
 import {
   CalendarCheck,
   Calendar,
@@ -101,9 +102,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({
   const attendanceRate = totalStaff > 0 ? Math.round(((presentCount + halfDayCount * 0.5) / totalStaff) * 100) : 0;
 
   const changeDateByDays = (days: number) => {
-    const current = new Date(date);
+    const current = new Date(`${date}T00:00:00`);
     current.setDate(current.getDate() + days);
-    onDateChange(current.toISOString().split('T')[0]);
+    onDateChange(todayLocal(current));
   };
 
   return (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { todayLocal } from '../utils';
 import {
   X,
   User,
@@ -56,7 +57,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
     parent_address: '',
     
     // Employment
-    doj: new Date().toISOString().split('T')[0],
+    doj: todayLocal(),
     role: 'General Worker',
     wage_type: 'Piece Rate' as WageType,
     daily_rate: 400,
@@ -105,7 +106,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
         mother_name: '',
         parent_phone: '',
         parent_address: '',
-        doj: new Date().toISOString().split('T')[0],
+        doj: todayLocal(),
         role: 'General Worker',
         wage_type: 'Piece Rate',
         daily_rate: 400,
@@ -201,7 +202,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="px-6 py-4.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300">
               <User className="w-5 h-5" />
@@ -425,7 +426,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
             <div className="space-y-4 animate-in fade-in-50 duration-150">
               {isMarried ? (
                 /* SPOUSE DETAILS */
-                <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-4.5 space-y-4">
+                <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-5 space-y-4">
                   <div className="flex items-center space-x-2 text-rose-800 font-bold text-sm pb-2 border-b border-rose-200">
                     <Heart className="w-4 h-4 text-rose-600 fill-rose-600" />
                     <span>Spouse Details (Married Worker)</span>
@@ -478,7 +479,7 @@ export const StaffModal: React.FC<StaffModalProps> = ({
                 </div>
               ) : (
                 /* PARENTS DETAILS */
-                <div className="bg-sky-50/60 border border-sky-200/80 rounded-xl p-4.5 space-y-4">
+                <div className="bg-sky-50/60 border border-sky-200/80 rounded-xl p-5 space-y-4">
                   <div className="flex items-center space-x-2 text-sky-900 font-bold text-sm pb-2 border-b border-sky-200">
                     <Users2 className="w-4 h-4 text-sky-600" />
                     <span>Parents Details (Unmarried / Single Worker)</span>

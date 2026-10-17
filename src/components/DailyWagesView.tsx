@@ -165,7 +165,7 @@ export const DailyWagesView: React.FC<DailyWagesViewProps> = ({
       {/* Aggregate Financial Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-print">
         {/* Total Wages */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-4.5 shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-5 shadow-xs">
           <span className="text-[10px] sm:text-[11px] uppercase font-bold text-slate-500 tracking-wider">Total Daily Wages</span>
           <div className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 sm:mt-1">
             ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
@@ -174,7 +174,7 @@ export const DailyWagesView: React.FC<DailyWagesViewProps> = ({
         </div>
 
         {/* Paid Wages */}
-        <div className="bg-emerald-50/80 rounded-2xl border border-emerald-200 p-3.5 sm:p-4.5 shadow-xs">
+        <div className="bg-emerald-50/80 rounded-2xl border border-emerald-200 p-3.5 sm:p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] uppercase font-bold text-emerald-800 tracking-wider">Paid</span>
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -186,7 +186,7 @@ export const DailyWagesView: React.FC<DailyWagesViewProps> = ({
         </div>
 
         {/* Pending Payout */}
-        <div className="bg-amber-50/80 rounded-2xl border border-amber-200 p-3.5 sm:p-4.5 shadow-xs">
+        <div className="bg-amber-50/80 rounded-2xl border border-amber-200 p-3.5 sm:p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] uppercase font-bold text-amber-800 tracking-wider">Pending</span>
             <Clock className="w-3.5 h-3.5 text-amber-600" />
@@ -198,7 +198,7 @@ export const DailyWagesView: React.FC<DailyWagesViewProps> = ({
         </div>
 
         {/* Total Volume */}
-        <div className="bg-indigo-50/80 rounded-2xl border border-indigo-200 p-3.5 sm:p-4.5 shadow-xs">
+        <div className="bg-indigo-50/80 rounded-2xl border border-indigo-200 p-3.5 sm:p-5 shadow-xs">
           <span className="text-[10px] sm:text-[11px] uppercase font-bold text-indigo-800 tracking-wider">Total Volume</span>
           <div className="text-xl sm:text-2xl font-black text-indigo-950 mt-0.5 sm:mt-1">
             {totalUnits.toLocaleString('en-IN')} <span className="text-xs font-semibold text-indigo-700">units</span>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { todayLocal } from '../utils';
 import {
   X,
   Calculator,
@@ -35,7 +36,7 @@ export const WageModal: React.FC<WageModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const [wageDate, setWageDate] = useState(new Date().toISOString().split('T')[0]);
+  const [wageDate, setWageDate] = useState(todayLocal());
   const [staffId, setStaffId] = useState<number>(staffList.length > 0 ? staffList[0].id : 0);
   const [jobTypeId, setJobTypeId] = useState<number | null>(jobTypes.length > 0 ? jobTypes[0].id : null);
   const [workDescription, setWorkDescription] = useState('');
@@ -63,7 +64,7 @@ export const WageModal: React.FC<WageModalProps> = ({
       setPaymentMode(initialData.payment_mode || 'Cash');
       setNotes(initialData.notes || '');
     } else {
-      setWageDate(new Date().toISOString().split('T')[0]);
+      setWageDate(todayLocal());
       if (staffList.length > 0) setStaffId(staffList[0].id);
       if (jobTypes.length > 0) {
         setJobTypeId(jobTypes[0].id);
@@ -154,7 +155,7 @@ export const WageModal: React.FC<WageModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-6 py-4.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-amber-300">
               <Calculator className="w-5 h-5" />

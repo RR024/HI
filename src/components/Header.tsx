@@ -8,7 +8,6 @@ interface HeaderProps {
   onLogout: () => void;
   onOpenStaffModal: () => void;
   onOpenWageModal: () => void;
-  activeTab: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -102,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="text-xs font-bold text-slate-900 leading-tight truncate max-w-[120px]">
                     {currentUser.name}
                   </div>
-                  <span className={`inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded border ${getRoleColor(currentUser.role)} mt-0.5`}>
+                  <span className={`inline-block text-[9px] font-extrabold px-1.5 py-0.5 rounded border ${getRoleColor(currentUser.role)} mt-0.5`}>
                     {currentUser.role}
                   </span>
                 </div>

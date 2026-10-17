@@ -8,7 +8,9 @@
     "server": "node server/index.js",
     "client": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "node server/index.js",
+    "start:prod": "NODE_ENV=production node server/index.js"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -17,19 +19,21 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "better-sqlite3": "^13.0.3",
+    "concurrently": "^10.0.5",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "12.4.1",
     "clsx": "^2.1.1",
-    "concurrently": "^10.0.5",
     "cors": "^2.8.6",
     "date-fns": "^4.4.0",
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
@@ -39,5 +43,8 @@
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.7.0",
     "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

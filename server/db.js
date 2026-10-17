@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+import { todayStr, addDays } from './util.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -139,6 +140,21 @@ export function initDatabase() {
       FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
     );
 
+    -- 8. Audit log (who changed what)
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT,
+      action TEXT NOT NULL,
+      entity TEXT NOT NULL,
+      entity_id TEXT,
+      detail TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_wages_date ON daily_wages(wage_date);
+    CREATE INDEX IF NOT EXISTS idx_wages_staff ON daily_wages(staff_id);
+    CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
+
     -- 7. Company Settings
     CREATE TABLE IF NOT EXISTS company_settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -156,45 +172,46 @@ export function initDatabase() {
 
   // Initialize company settings default if empty
   const hasSettings = db.prepare('SELECT COUNT(*) as count FROM company_settings').get();
-  if (hasSettings.count === 0) {
+  if (hasSettings.count === 0 && !DEMO) {
+    db.prepare(`
+      INSERT INTO company_settings (id, company_name, tagline, address, phone, email, gstin, esi_code, currency_symbol, standard_working_hours)
+      VALUES (1, 'Your Company Name', 'Daily Production, Piece-Rate & Payroll System', '', '', '', '', '', '₹', 8)
+    `).run();
+  } else if (hasSettings.count === 0) {
     db.prepare(`
       INSERT INTO company_settings (id, company_name, tagline, address, phone, email, gstin, esi_code, currency_symbol, standard_working_hours)
       VALUES (1, 'Apex Agro & Industrial Works Pvt Ltd', 'Daily Production, Piece-Rate & Payroll System', 'Plot 42, Industrial Growth Center, Phase 2, Coimbatore, Tamil Nadu - 641001', '+91 98450 12345', 'operations@apexindustries.in', '33AAAAA0000A1Z5', 'ESI-54000987650001001', '₹', 8)
     `).run();
   }
 
-  // Seed default Users & sample data
-  seedInitialData();
+  // Demo data / demo accounts are for local development only.
+  if (DEMO) {
+    seedInitialData();
+  } else {
+    bootstrapAdmin();
+  }
+}
+
+// Demo seeding is ON in development and OFF in production unless SEED_DEMO_DATA=true.
+const DEMO = process.env.SEED_DEMO_DATA === 'true' || (process.env.NODE_ENV !== 'production' && process.env.SEED_DEMO_DATA !== 'false');
+
+/** Production: create the first admin from env vars instead of well-known demo accounts. */
+function bootstrapAdmin() {
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM users').get();
+  if (count > 0) return;
+  const username = process.env.ADMIN_USERNAME;
+  const password = process.env.ADMIN_PASSWORD;
+  if (!username || !password || password.length < 8) {
+    console.warn('No users exist. Set ADMIN_USERNAME, ADMIN_EMAIL and ADMIN_PASSWORD (min 8 chars) to create the first admin.');
+    return;
+  }
+  db.prepare(`INSERT INTO users (username, email, password_hash, name, role, status) VALUES (?, ?, ?, ?, 'Admin', 'Active')`)
+    .run(username.trim().toLowerCase(), (process.env.ADMIN_EMAIL || `${username}@example.com`).toLowerCase(), bcrypt.hashSync(password, 12), process.env.ADMIN_NAME || 'Administrator');
+  console.log(`Initial admin '${username}' created.`);
 }
 
 function seedInitialData() {
-  // 1. Seed Users for RBAC if empty
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
-  if (userCount.count === 0) {
-    console.log('Seeding RBAC Users...');
-    const insertUser = db.prepare(`
-      INSERT INTO users (username, email, password_hash, name, role, staff_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'Active')
-    `);
-
-    const salt = bcrypt.genSaltSync(10);
-
-    // 1. Admin: admin / admin123
-    insertUser.run('admin', 'admin@apexindustries.in', bcrypt.hashSync('admin123', salt), 'Rajesh V. (System Admin)', 'Admin', null);
-    
-    // 2. Supervisor: supervisor / super123
-    insertUser.run('supervisor', 'supervisor@apexindustries.in', bcrypt.hashSync('super123', salt), 'Senthil Nathan (Floor Lead)', 'Supervisor', null);
-    
-    // 3. Accountant: accountant / account123
-    insertUser.run('accountant', 'accounts@apexindustries.in', bcrypt.hashSync('account123', salt), 'Pooja Sharma (Accounts)', 'Accountant', null);
-    
-    // 4. Worker: ramesh / ramesh123 (linked to Staff 1)
-    insertUser.run('ramesh', 'ramesh@apexindustries.in', bcrypt.hashSync('ramesh123', salt), 'Ramesh Kumar (Worker)', 'Worker', 1);
-
-    console.log('RBAC users seeded successfully.');
-  }
-
-  // 2. Seed Work / Job Types if empty
+  // 1. Seed Work / Job Types if empty
   const jobCount = db.prepare('SELECT COUNT(*) as count FROM job_types').get();
   if (jobCount.count === 0) {
     const insertJob = db.prepare(`
@@ -216,7 +233,7 @@ function seedInitialData() {
     }
   }
 
-  // 3. Seed Staff Members if empty
+  // 2. Seed Staff Members if empty
   const staffCount = db.prepare('SELECT COUNT(*) as count FROM staff').get();
   if (staffCount.count === 0) {
     const insertStaff = db.prepare(`
@@ -299,12 +316,38 @@ function seedInitialData() {
     }
   }
 
+  // 3. Seed Users for RBAC if empty (Staff 1 now exists)
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+  if (userCount.count === 0) {
+    console.log('Seeding RBAC Users...');
+    const insertUser = db.prepare(`
+      INSERT INTO users (username, email, password_hash, name, role, staff_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'Active')
+    `);
+
+    const salt = bcrypt.genSaltSync(10);
+
+    // 1. Admin: admin / admin123
+    insertUser.run('admin', 'admin@apexindustries.in', bcrypt.hashSync('admin123', salt), 'Rajesh V. (System Admin)', 'Admin', null);
+    
+    // 2. Supervisor: supervisor / super123
+    insertUser.run('supervisor', 'supervisor@apexindustries.in', bcrypt.hashSync('super123', salt), 'Senthil Nathan (Floor Lead)', 'Supervisor', null);
+    
+    // 3. Accountant: accountant / account123
+    insertUser.run('accountant', 'accounts@apexindustries.in', bcrypt.hashSync('account123', salt), 'Pooja Sharma (Accounts)', 'Accountant', null);
+    
+    // 4. Worker: ramesh / ramesh123 (linked to Staff 1)
+    insertUser.run('ramesh', 'ramesh@apexindustries.in', bcrypt.hashSync('ramesh123', salt), 'Ramesh Kumar (Worker)', 'Worker', 1);
+
+    console.log('RBAC users seeded successfully.');
+  }
+
   // 4. Seed Attendance and Wages if empty
   const wageCount = db.prepare('SELECT COUNT(*) as count FROM daily_wages').get();
   if (wageCount.count === 0) {
-    const today = new Date().toISOString().split('T')[0];
-    const d1 = new Date(Date.now() - 86400000 * 1).toISOString().split('T')[0];
-    const d2 = new Date(Date.now() - 86400000 * 2).toISOString().split('T')[0];
+    const today = todayStr();
+    const d1 = addDays(today, -1);
+    const d2 = addDays(today, -2);
 
     const insertAttendance = db.prepare(`
       INSERT INTO attendance (staff_id, date, status, overtime_hours, shift, notes)

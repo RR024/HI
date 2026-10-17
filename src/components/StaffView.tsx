@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { todayLocal } from '../utils';
 import {
   Users,
   Plus,
@@ -91,7 +92,7 @@ export const StaffView: React.FC<StaffViewProps> = ({
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Staff Directory');
-    XLSX.writeFile(wb, `Staff_Directory_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `Staff_Directory_${todayLocal()}.xlsx`);
   };
 
   return (
@@ -231,7 +232,7 @@ export const StaffView: React.FC<StaffViewProps> = ({
                       <div>
                         <div className="font-extrabold text-slate-900 text-sm">{staff.name}</div>
                         <div className="flex items-center space-x-1.5 text-[11px] text-slate-500 mt-0.5">
-                          <span className="font-mono bg-slate-100 font-bold px-1.5 py-0.2 rounded text-slate-700">
+                          <span className="font-mono bg-slate-100 font-bold px-1.5 py-0.5 rounded text-slate-700">
                             {staff.staff_code}
                           </span>
                           <span>•</span>
@@ -379,10 +380,10 @@ export const StaffView: React.FC<StaffViewProps> = ({
                                 <ChevronRight className="w-3 h-3 text-slate-400 group-hover:text-indigo-600" />
                               </button>
                               <div className="flex items-center space-x-1.5 mt-0.5">
-                                <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded font-semibold">
+                                <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-semibold">
                                   {staff.staff_code}
                                 </span>
-                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                                   staff.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
                                 }`}>
                                   {staff.status}

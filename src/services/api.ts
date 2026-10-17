@@ -1,10 +1,35 @@
 import { Staff, JobType, AttendanceRecord, DailyWage, Advance, CompanySettings, DashboardStats, User, AuthResponse } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`;
+
+/** Turn an error response ({"error": "..."} JSON or plain text) into a readable message. */
+async function errorMessage(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed.error === 'string') return parsed.error;
+  } catch {
+    /* not JSON */
+  }
+  return text || `Request failed (${res.status})`;
+}
 
 function getAuthHeader(): Record<string, string> {
   const token = localStorage.getItem('workpulse_auth_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...getAuthHeader(),
+    ...(options.headers || {}),
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 && !url.includes('/auth/login')) {
+    api.logout();
+    window.dispatchEvent(new Event('auth:unauthorized'));
+  }
+  return res;
 }
 
 export const api = {
@@ -23,10 +48,8 @@ export const api = {
   },
 
   async getCurrentUser(): Promise<User> {
-    const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/auth/me`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
@@ -36,23 +59,27 @@ export const api = {
   },
 
   getStoredUser(): User | null {
-    const user = localStorage.getItem('workpulse_user');
-    return user ? JSON.parse(user) : null;
+    try {
+      const user = localStorage.getItem('workpulse_user');
+      return user ? JSON.parse(user) : null;
+    } catch (e) {
+      console.error('Failed to parse stored user from localStorage:', e);
+      localStorage.removeItem('workpulse_user');
+      return null;
+    }
   },
 
   // User Management (Admin only)
   async getUsers(): Promise<User[]> {
-    const res = await fetch(`${API_BASE}/auth/users`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/auth/users`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createUser(data: Partial<User> & { password?: string }): Promise<User> {
-    const res = await fetch(`${API_BASE}/auth/users`, {
+    const res = await authFetch(`${API_BASE}/auth/users`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -61,9 +88,9 @@ export const api = {
   },
 
   async updateUser(id: number, data: Partial<User> & { password?: string }): Promise<User> {
-    const res = await fetch(`${API_BASE}/auth/users/${id}`, {
+    const res = await authFetch(`${API_BASE}/auth/users/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -72,11 +99,10 @@ export const api = {
   },
 
   async deleteUser(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/auth/users/${id}`, {
+    const res = await authFetch(`${API_BASE}/auth/users/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
@@ -88,10 +114,8 @@ export const api = {
     if (params?.marital_status) query.append('marital_status', params.marital_status);
     if (params?.role) query.append('role', params.role);
     
-    const res = await fetch(`${API_BASE}/staff?${query.toString()}`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/staff?${query.toString()}`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
@@ -102,17 +126,15 @@ export const api = {
     activeAdvances: Advance[];
     stats: { total_earned: number; total_pending: number };
   }> {
-    const res = await fetch(`${API_BASE}/staff/${id}`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/staff/${id}`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createStaff(data: Partial<Staff>): Promise<Staff> {
-    const res = await fetch(`${API_BASE}/staff`, {
+    const res = await authFetch(`${API_BASE}/staff`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -121,9 +143,9 @@ export const api = {
   },
 
   async updateStaff(id: number, data: Partial<Staff>): Promise<Staff> {
-    const res = await fetch(`${API_BASE}/staff/${id}`, {
+    const res = await authFetch(`${API_BASE}/staff/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -131,28 +153,25 @@ export const api = {
     return result;
   },
 
-  async deleteStaff(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/staff/${id}`, {
+  async deleteStaff(id: number): Promise<{ success: boolean; deactivated?: boolean; message?: string }> {
+    const res = await authFetch(`${API_BASE}/staff/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   // Job Types
   async getJobs(): Promise<JobType[]> {
-    const res = await fetch(`${API_BASE}/jobs`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/jobs`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createJob(data: Partial<JobType>): Promise<JobType> {
-    const res = await fetch(`${API_BASE}/jobs`, {
+    const res = await authFetch(`${API_BASE}/jobs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -161,9 +180,9 @@ export const api = {
   },
 
   async updateJob(id: number, data: Partial<JobType>): Promise<JobType> {
-    const res = await fetch(`${API_BASE}/jobs/${id}`, {
+    const res = await authFetch(`${API_BASE}/jobs/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -172,20 +191,17 @@ export const api = {
   },
 
   async deleteJob(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/jobs/${id}`, {
+    const res = await authFetch(`${API_BASE}/jobs/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   // Attendance
   async getAttendance(date: string): Promise<{ date: string; records: AttendanceRecord[] }> {
-    const res = await fetch(`${API_BASE}/attendance?date=${date}`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/attendance?date=${date}`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
@@ -196,9 +212,9 @@ export const api = {
     shift: string;
     notes: string;
   }>): Promise<{ success: boolean; message: string }> {
-    const res = await fetch(`${API_BASE}/attendance/bulk`, {
+    const res = await authFetch(`${API_BASE}/attendance/bulk`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date, records }),
     });
     const result = await res.json();
@@ -223,17 +239,15 @@ export const api = {
     if (params?.status) query.append('status', params.status);
     if (params?.job_type_id) query.append('job_type_id', String(params.job_type_id));
 
-    const res = await fetch(`${API_BASE}/wages?${query.toString()}`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/wages?${query.toString()}`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createWage(data: Partial<DailyWage>): Promise<DailyWage> {
-    const res = await fetch(`${API_BASE}/wages`, {
+    const res = await authFetch(`${API_BASE}/wages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -242,9 +256,9 @@ export const api = {
   },
 
   async updateWage(id: number, data: Partial<DailyWage>): Promise<DailyWage> {
-    const res = await fetch(`${API_BASE}/wages/${id}`, {
+    const res = await authFetch(`${API_BASE}/wages/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -253,9 +267,9 @@ export const api = {
   },
 
   async updateWageStatus(id: number, payment_status: string, payment_mode?: string): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/wages/${id}/status`, {
+    const res = await authFetch(`${API_BASE}/wages/${id}/status`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ payment_status, payment_mode }),
     });
     const result = await res.json();
@@ -264,27 +278,24 @@ export const api = {
   },
 
   async deleteWage(id: number): Promise<{ success: boolean }> {
-    const res = await fetch(`${API_BASE}/wages/${id}`, {
+    const res = await authFetch(`${API_BASE}/wages/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeader(),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   // Advances
   async getAdvances(): Promise<Advance[]> {
-    const res = await fetch(`${API_BASE}/advances`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/advances`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createAdvance(data: Partial<Advance>): Promise<Advance> {
-    const res = await fetch(`${API_BASE}/advances`, {
+    const res = await authFetch(`${API_BASE}/advances`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();
@@ -294,26 +305,22 @@ export const api = {
 
   // Dashboard stats
   async getDashboardStats(): Promise<DashboardStats> {
-    const res = await fetch(`${API_BASE}/dashboard/stats`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/dashboard/stats`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   // Company Settings
   async getSettings(): Promise<CompanySettings> {
-    const res = await fetch(`${API_BASE}/settings`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new Error(await res.text());
+    const res = await authFetch(`${API_BASE}/settings`);
+    if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async updateSettings(data: Partial<CompanySettings>): Promise<CompanySettings> {
-    const res = await fetch(`${API_BASE}/settings`, {
+    const res = await authFetch(`${API_BASE}/settings`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
     const result = await res.json();

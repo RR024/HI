@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { todayLocal } from '../utils';
 import {
   FileSpreadsheet,
   Printer,
@@ -14,6 +15,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { DailyWage, Staff, CompanySettings } from '../types';
+import { api } from '../services/api';
 import * as XLSX from 'xlsx';
 
 interface ReportsViewProps {
@@ -31,12 +33,37 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   
   // Filter state for payslip
   const [selectedStaffId, setSelectedStaffId] = useState<number>(staffList.length > 0 ? staffList[0].id : 0);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [selectedMonth, setSelectedMonth] = useState<string>(todayLocal().slice(0, 7)); // YYYY-MM
+  const [monthWages, setMonthWages] = useState<DailyWage[]>(wages);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadMonthWages = async () => {
+      try {
+        const parts = selectedMonth.split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const lastDay = new Date(year, month, 0).getDate();
+        const startDate = `${selectedMonth}-01`;
+        const endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`;
+        const data = await api.getWages({ startDate, endDate });
+        if (isMounted) {
+          setMonthWages(data);
+        }
+      } catch (e) {
+        console.error('Error fetching monthly wages for reports:', e);
+      }
+    };
+    loadMonthWages();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedMonth]);
 
   const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
 
   // Filter wages for selected staff and month
-  const staffMonthWages = wages.filter(
+  const staffMonthWages = monthWages.filter(
     (w) => w.staff_id === selectedStaffId && w.wage_date.startsWith(selectedMonth)
   );
 
@@ -57,7 +84,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const handleExportBankAdvice = () => {
     // Group all wages by worker for selected month
     const staffMap = new Map<number, { staff: Staff; totalWage: number; count: number }>();
-    wages
+    monthWages
       .filter((w) => w.wage_date.startsWith(selectedMonth))
       .forEach((w) => {
         const s = staffList.find((st) => st.id === w.staff_id);
@@ -91,7 +118,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   // ESI Register Export
   const handleExportEsi = () => {
     const rows = staffList.map((s, idx) => {
-      const staffWages = wages.filter((w) => w.staff_id === s.id && w.wage_date.startsWith(selectedMonth));
+      const staffWages = monthWages.filter((w) => w.staff_id === s.id && w.wage_date.startsWith(selectedMonth));
       const gross = staffWages.reduce((acc, curr) => acc + curr.net_wage, 0);
       const employeeEsi = Math.round(gross * 0.0075); // 0.75% standard employee ESI
       const employerEsi = Math.round(gross * 0.0325); // 3.25% standard employer ESI
