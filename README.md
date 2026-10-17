@@ -1,6 +1,6 @@
 # WorkPulse Pro - Daily Staff, Attendance & Piece-Rate Wages Management System
 
-A comprehensive, production-ready full-stack web application designed for companies to manage **staff records with conditional family details (Spouse/Parents)**, **daily attendance & overtime**, **piece-rate work definitions (e.g., ₹100 per 100 kg)**, **daily wage calculations**, **bank disbursements**, and **statutory ESI compliance**.
+A full-stack web application designed for companies to manage **staff records with conditional family details (Spouse/Parents)**, **daily attendance & overtime**, **piece-rate work definitions (e.g., ₹100 per 100 kg)**, **daily wage calculations**, **bank disbursements**, and **statutory ESI compliance**.
 
 ---
 
@@ -9,7 +9,7 @@ A comprehensive, production-ready full-stack web application designed for compan
 ### 0. 🔐 Role-Based Access Control (RBAC) Login System
 * **Enterprise Authentication with JWT & Bcrypt Password Hashing**:
   * **Role-Based Permissions**: UI tabs, API endpoints, and data views adapt dynamically based on the authenticated user's role.
-* **Pre-Configured Demo Accounts (1-Click Demo Login in UI)**:
+* **Demo accounts (development only — they are NOT created when `NODE_ENV=production`)**:
   | Role | Username | Password | Access Scope & Permissions |
   |---|---|---|---|
   | 👑 **Admin** | `admin` | `admin123` | **Full unrestricted access**: Staff CRUD & delete, Job schemes, Attendance, Daily wages, Payouts, Payslips, Bank & ESI exports, Company settings, and User management. |
@@ -96,3 +96,29 @@ npm run dev
 ## 🛠️ Tech Stack
 * **Frontend**: React 19, Vite, Tailwind CSS v4, Lucide Icons, Recharts, xlsx, date-fns
 * **Backend**: Node.js, Express.js REST API, SQLite (`better-sqlite3` with WAL mode & Foreign Keys)
+
+
+---
+
+## 🚀 Setup, Security & Deployment
+
+```bash
+cp .env.example .env      # then fill in values
+npm install
+npm run dev               # dev: demo users/data are seeded automatically
+```
+
+**Production** (single service: Express serves the API *and* the built UI):
+
+```bash
+npm ci && npm run build
+NODE_ENV=production JWT_SECRET=<32+ random chars> ADMIN_USERNAME=... ADMIN_PASSWORD=... npm start
+```
+
+* The server **refuses to start in production without `JWT_SECRET`**; demo accounts are never created there. The first admin comes from `ADMIN_USERNAME` / `ADMIN_PASSWORD` when the users table is empty.
+* SQLite needs a **persistent disk** (Render/Railway/Fly volume, or a VPS). Vercel/Netlify serverless functions cannot persist it — if you host only the UI there, set `VITE_API_URL` at build time and `CORS_ORIGIN` on the server.
+* Back up `server/database.sqlite` *together with* its `-wal` and `-shm` files (or use `sqlite3 .backup`).
+* Roles are re-read from the database on every request; deactivating a user takes effect immediately.
+* Deleting a staff member who has attendance/wage/advance history **deactivates** them instead (payroll history is preserved).
+* All changes to users, staff, wages, advances and settings are recorded in `audit_log` (`GET /api/audit`, Admin only).
+"# HI" 
