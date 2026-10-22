@@ -121,4 +121,23 @@ NODE_ENV=production JWT_SECRET=<32+ random chars> ADMIN_USERNAME=... ADMIN_PASSW
 * Roles are re-read from the database on every request; deactivating a user takes effect immediately.
 * Deleting a staff member who has attendance/wage/advance history **deactivates** them instead (payroll history is preserved).
 * All changes to users, staff, wages, advances and settings are recorded in `audit_log` (`GET /api/audit`, Admin only).
+
+### Temporary Vercel-only testing mode
+
+When only the React frontend is deployed to Vercel, set the Vercel build environment variable
+`VITE_DEMO_MODE=true`. The frontend then uses the demo accounts and stores test users, staff,
+attendance, wages, jobs, advances, and settings in the current browser's `localStorage`.
+
+Demo accounts:
+
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin` | `admin123` |
+| Supervisor | `supervisor` | `super123` |
+| Accountant | `accountant` | `account123` |
+| Worker | `ramesh` | `ramesh123` |
+
+This mode is for testing only. `localStorage` is browser-specific, can be cleared by the user,
+and must not be used for production credentials or payroll data. Set `VITE_DEMO_MODE=false`
+and configure `VITE_API_URL` when the backend is deployed.
 "# HI" 

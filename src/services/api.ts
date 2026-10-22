@@ -1,6 +1,8 @@
 import { Staff, JobType, AttendanceRecord, DailyWage, Advance, CompanySettings, DashboardStats, User, AuthResponse } from '../types';
+import { localDemo } from './localDemo';
 
 const API_BASE = `${import.meta.env.VITE_API_URL ?? ''}/api`;
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
 /** Turn an error response ({"error": "..."} JSON or plain text) into a readable message. */
 async function errorMessage(res: Response): Promise<string> {
@@ -35,6 +37,7 @@ async function authFetch(url: string, options: RequestInit = {}): Promise<Respon
 export const api = {
   // Auth
   async login(username: string, password: string): Promise<AuthResponse> {
+    if (DEMO_MODE) return localDemo.login(username, password);
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -48,17 +51,27 @@ export const api = {
   },
 
   async getCurrentUser(): Promise<User> {
+    if (DEMO_MODE) {
+      const user = localDemo.getStoredUser();
+      if (!user) throw new Error('Authentication required. Please login.');
+      return user;
+    }
     const res = await authFetch(`${API_BASE}/auth/me`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   logout() {
+    if (DEMO_MODE) {
+      localDemo.logout();
+      return;
+    }
     localStorage.removeItem('workpulse_auth_token');
     localStorage.removeItem('workpulse_user');
   },
 
   getStoredUser(): User | null {
+    if (DEMO_MODE) return localDemo.getStoredUser();
     try {
       const user = localStorage.getItem('workpulse_user');
       return user ? JSON.parse(user) : null;
@@ -71,12 +84,14 @@ export const api = {
 
   // User Management (Admin only)
   async getUsers(): Promise<User[]> {
+    if (DEMO_MODE) return localDemo.getUsers();
     const res = await authFetch(`${API_BASE}/auth/users`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createUser(data: Partial<User> & { password?: string }): Promise<User> {
+    if (DEMO_MODE) return localDemo.createUser(data);
     const res = await authFetch(`${API_BASE}/auth/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,6 +103,7 @@ export const api = {
   },
 
   async updateUser(id: number, data: Partial<User> & { password?: string }): Promise<User> {
+    if (DEMO_MODE) return localDemo.updateUser(id, data);
     const res = await authFetch(`${API_BASE}/auth/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -99,6 +115,7 @@ export const api = {
   },
 
   async deleteUser(id: number): Promise<{ success: boolean }> {
+    if (DEMO_MODE) return localDemo.deleteUser(id);
     const res = await authFetch(`${API_BASE}/auth/users/${id}`, {
       method: 'DELETE',
     });
@@ -108,6 +125,7 @@ export const api = {
 
   // Staff
   async getStaff(params?: { search?: string; status?: string; marital_status?: string; role?: string }): Promise<Staff[]> {
+    if (DEMO_MODE) return localDemo.getStaff(params);
     const query = new URLSearchParams();
     if (params?.search) query.append('search', params.search);
     if (params?.status) query.append('status', params.status);
@@ -126,12 +144,14 @@ export const api = {
     activeAdvances: Advance[];
     stats: { total_earned: number; total_pending: number };
   }> {
+    if (DEMO_MODE) return localDemo.getStaffById(id);
     const res = await authFetch(`${API_BASE}/staff/${id}`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createStaff(data: Partial<Staff>): Promise<Staff> {
+    if (DEMO_MODE) return localDemo.createStaff(data);
     const res = await authFetch(`${API_BASE}/staff`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -143,6 +163,7 @@ export const api = {
   },
 
   async updateStaff(id: number, data: Partial<Staff>): Promise<Staff> {
+    if (DEMO_MODE) return localDemo.updateStaff(id, data);
     const res = await authFetch(`${API_BASE}/staff/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -154,6 +175,7 @@ export const api = {
   },
 
   async deleteStaff(id: number): Promise<{ success: boolean; deactivated?: boolean; message?: string }> {
+    if (DEMO_MODE) return localDemo.deleteStaff(id);
     const res = await authFetch(`${API_BASE}/staff/${id}`, {
       method: 'DELETE',
     });
@@ -163,12 +185,14 @@ export const api = {
 
   // Job Types
   async getJobs(): Promise<JobType[]> {
+    if (DEMO_MODE) return localDemo.getJobs();
     const res = await authFetch(`${API_BASE}/jobs`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createJob(data: Partial<JobType>): Promise<JobType> {
+    if (DEMO_MODE) return localDemo.createJob(data);
     const res = await authFetch(`${API_BASE}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -180,6 +204,7 @@ export const api = {
   },
 
   async updateJob(id: number, data: Partial<JobType>): Promise<JobType> {
+    if (DEMO_MODE) return localDemo.updateJob(id, data);
     const res = await authFetch(`${API_BASE}/jobs/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -191,6 +216,7 @@ export const api = {
   },
 
   async deleteJob(id: number): Promise<{ success: boolean }> {
+    if (DEMO_MODE) return localDemo.deleteJob(id);
     const res = await authFetch(`${API_BASE}/jobs/${id}`, {
       method: 'DELETE',
     });
@@ -200,6 +226,7 @@ export const api = {
 
   // Attendance
   async getAttendance(date: string): Promise<{ date: string; records: AttendanceRecord[] }> {
+    if (DEMO_MODE) return localDemo.getAttendance(date);
     const res = await authFetch(`${API_BASE}/attendance?date=${date}`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
@@ -212,6 +239,7 @@ export const api = {
     shift: string;
     notes: string;
   }>): Promise<{ success: boolean; message: string }> {
+    if (DEMO_MODE) return localDemo.saveBulkAttendance(date, records);
     const res = await authFetch(`${API_BASE}/attendance/bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -231,6 +259,7 @@ export const api = {
     status?: string;
     job_type_id?: string | number;
   }): Promise<DailyWage[]> {
+    if (DEMO_MODE) return localDemo.getWages(params);
     const query = new URLSearchParams();
     if (params?.date) query.append('date', params.date);
     if (params?.startDate) query.append('startDate', params.startDate);
@@ -245,6 +274,7 @@ export const api = {
   },
 
   async createWage(data: Partial<DailyWage>): Promise<DailyWage> {
+    if (DEMO_MODE) return localDemo.createWage(data);
     const res = await authFetch(`${API_BASE}/wages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -256,6 +286,7 @@ export const api = {
   },
 
   async updateWage(id: number, data: Partial<DailyWage>): Promise<DailyWage> {
+    if (DEMO_MODE) return localDemo.updateWage(id, data);
     const res = await authFetch(`${API_BASE}/wages/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -267,6 +298,7 @@ export const api = {
   },
 
   async updateWageStatus(id: number, payment_status: string, payment_mode?: string): Promise<{ success: boolean }> {
+    if (DEMO_MODE) return localDemo.updateWageStatus(id, payment_status, payment_mode);
     const res = await authFetch(`${API_BASE}/wages/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -278,6 +310,7 @@ export const api = {
   },
 
   async deleteWage(id: number): Promise<{ success: boolean }> {
+    if (DEMO_MODE) return localDemo.deleteWage(id);
     const res = await authFetch(`${API_BASE}/wages/${id}`, {
       method: 'DELETE',
     });
@@ -287,12 +320,14 @@ export const api = {
 
   // Advances
   async getAdvances(): Promise<Advance[]> {
+    if (DEMO_MODE) return localDemo.getAdvances();
     const res = await authFetch(`${API_BASE}/advances`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async createAdvance(data: Partial<Advance>): Promise<Advance> {
+    if (DEMO_MODE) return localDemo.createAdvance(data);
     const res = await authFetch(`${API_BASE}/advances`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -305,6 +340,7 @@ export const api = {
 
   // Dashboard stats
   async getDashboardStats(): Promise<DashboardStats> {
+    if (DEMO_MODE) return localDemo.getDashboardStats();
     const res = await authFetch(`${API_BASE}/dashboard/stats`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
@@ -312,12 +348,14 @@ export const api = {
 
   // Company Settings
   async getSettings(): Promise<CompanySettings> {
+    if (DEMO_MODE) return localDemo.getSettings();
     const res = await authFetch(`${API_BASE}/settings`);
     if (!res.ok) throw new Error(await errorMessage(res));
     return res.json();
   },
 
   async updateSettings(data: Partial<CompanySettings>): Promise<CompanySettings> {
+    if (DEMO_MODE) return localDemo.updateSettings(data);
     const res = await authFetch(`${API_BASE}/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
